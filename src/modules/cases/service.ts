@@ -214,19 +214,36 @@ export async function patchCaseData(caseId: string, patch: Record<string, string
   await audit({ actorType: actor.type, actorId: actor.id, action: "case.data_patched", entityType: "Case", entityId: caseId, meta: { fields: Object.keys(patch) } });
 }
 
+/** orderId do gateway: único, ≤ 15 caracteres (limite MB WAY/cartão ifthenpay). */
+function newOrderId() {
+  return `CJ${randomToken(16).replace(/[^A-Za-z0-9]/g, "").slice(0, 13)}`;
+}
+
 export async function startPayment(caseId: string, method: Method, phone: string | undefined, actor: Actor) {
   const c = await db.case.findUniqueOrThrow({ where: { id: caseId }, include: { category: true } });
   if (c.status !== "AWAITING_PAYMENT") throw new Error("Este processo não está a aguardar pagamento");
   if ((await missingRequiredFields(c)).length > 0) throw new Error("Existem dados obrigatórios em falta");
+  if (await db.payment.count({ where: { caseId, status: "PENDING" } })) throw new Error("Já existe um pagamento pendente");
   const provider = getPaymentProvider();
+  if (!provider.methods.includes(method)) throw new Error("Método de pagamento indisponível");
+
+  const orderId = newOrderId();
+  const callbackBase = `${env.appUrl}/api/payments/${provider.name}`;
   const created = await provider.create({
     caseId,
     caseReference: c.reference,
+    orderId,
     amountCents: c.category.priceCents,
     method,
     phone,
     email: c.email,
-    returnUrl: env.appUrl,
+    clientName: c.displayName,
+    returnUrls: {
+      success: `${callbackBase}/return?result=success`,
+      error: `${callbackBase}/return?result=error`,
+      cancel: `${callbackBase}/return?result=cancel`,
+    },
+    notificationUrl: `${callbackBase}/notification`,
   });
   const payment = await db.payment.create({
     data: {
@@ -234,12 +251,34 @@ export async function startPayment(caseId: string, method: Method, phone: string
       provider: provider.name,
       method,
       amountCents: c.category.priceCents,
-      providerRef: created.providerRef,
+      providerRef: orderId,
+      providerRequestId: created.providerRequestId ?? null,
       instructions: created.instructions,
     },
   });
-  await audit({ actorType: actor.type, ip: actor.ip, action: "payment.created", entityType: "Case", entityId: caseId, meta: { method, paymentId: payment.id } });
+  await audit({ actorType: actor.type, ip: actor.ip, action: "payment.created", entityType: "Case", entityId: caseId, meta: { method, paymentId: payment.id, provider: provider.name } });
   return payment;
+}
+
+/** Abandona um pagamento pendente para escolher outro método. Um pagamento tardio continua a ser aceite. */
+export async function cancelPendingPayment(caseId: string, actor: Actor) {
+  const { count } = await db.payment.updateMany({ where: { caseId, status: "PENDING" }, data: { status: "EXPIRED" } });
+  if (count) await audit({ actorType: actor.type, ip: actor.ip, action: "payment.abandoned", entityType: "Case", entityId: caseId });
+}
+
+/** Consulta ativa do estado no gateway (ex.: MB WAY) — complementa o callback. */
+export async function syncPendingPayments(caseId: string) {
+  const provider = getPaymentProvider();
+  if (!provider.checkStatus) return;
+  const pending = await db.payment.findMany({ where: { caseId, status: "PENDING", provider: provider.name } });
+  for (const p of pending) {
+    try {
+      const event = await provider.checkStatus(p);
+      if (event) await handlePaymentEvent(event);
+    } catch (err) {
+      console.error("[payments] falha ao consultar estado", p.id, err);
+    }
+  }
 }
 
 /** Processa um evento de pagamento já autenticado pelo provider. Idempotente. */
@@ -247,6 +286,9 @@ export async function handlePaymentEvent(event: WebhookEvent) {
   const payment = await db.payment.findUnique({ where: { providerRef: event.providerRef } });
   if (!payment) return { ok: false as const, reason: "payment_not_found" };
   if (payment.status === "CONFIRMED") return { ok: true as const, duplicate: true };
+  // Um pagamento que já falhou/expirou só pode passar a confirmado (pagamento tardio).
+  if (payment.status !== "PENDING" && event.status !== "CONFIRMED") return { ok: true as const, duplicate: true };
+  const alreadyPaid = event.status === "CONFIRMED" && (await db.payment.count({ where: { caseId: payment.caseId, status: "CONFIRMED" } })) > 0;
 
   await db.payment.update({
     where: { id: payment.id },
@@ -258,6 +300,11 @@ export async function handlePaymentEvent(event: WebhookEvent) {
   });
   await audit({ actorType: "SYSTEM", action: `payment.${event.status.toLowerCase()}`, entityType: "Case", entityId: payment.caseId, meta: { paymentId: payment.id } });
 
+  if (alreadyPaid) {
+    // Pagamento em duplicado: fica registado para reembolso, sem voltar a gerar o documento.
+    await audit({ actorType: "SYSTEM", action: "payment.duplicate_needs_refund", entityType: "Case", entityId: payment.caseId, meta: { paymentId: payment.id } });
+    return { ok: true as const, duplicate: true };
+  }
   if (event.status === "CONFIRMED") {
     await db.case.update({ where: { id: payment.caseId }, data: { status: "PAYMENT_CONFIRMED" } });
     await processPaidCase(payment.caseId);

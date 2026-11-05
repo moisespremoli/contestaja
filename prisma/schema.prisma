@@ -215,7 +215,10 @@ model Payment {
   amountCents  Int
   currency     String        @default("EUR")
   status       PaymentStatus @default(PENDING)
+  /// Identificador do pagamento do nosso lado (orderId enviado ao gateway).
   providerRef  String        @unique
+  /// Token do gateway (ex.: RequestId ifthenpay).
+  providerRequestId String?  @unique
   /// Dados de pagamento a mostrar ao cliente (entidade/referência MB, telemóvel MB WAY mascarado, URL cartão).
   instructions Json?
   raw          Json?

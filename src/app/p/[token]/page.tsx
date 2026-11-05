@@ -10,11 +10,12 @@ import {
   hashAccessToken,
   missingRequiredFields,
   STATUS_LABELS,
+  syncPendingPayments,
 } from "@/modules/cases/service";
 import { catalogField } from "@/modules/fields/catalog";
 import { formatDateLong } from "@/modules/fields/format";
-import { METHOD_LABELS } from "@/modules/payments";
-import { completeFieldsAction, payAction } from "./actions";
+import { getPaymentProvider, METHOD_LABELS } from "@/modules/payments";
+import { cancelPaymentAction, completeFieldsAction, payAction } from "./actions";
 import { AutoRefresh, MissingFieldsForm, PaymentForm } from "./client";
 
 export const metadata = { title: "O seu processo", robots: { index: false } };
@@ -27,6 +28,9 @@ const DERIVED = /(^calc\.|^flags\.|^minuta\.|_extenso$|nome_efetivo$|morada_comp
 
 export default async function CasePage({ params }: PageProps<"/p/[token]">) {
   const { token } = await params;
+  const found = await db.case.findUnique({ where: { accessTokenHash: hashAccessToken(token) }, select: { id: true, status: true } });
+  // Consulta ativa do gateway (MB WAY) enquanto o cliente aguarda — complementa o callback.
+  if (found?.status === "AWAITING_PAYMENT") await syncPendingPayments(found.id);
   const c = await db.case.findUnique({
     where: { accessTokenHash: hashAccessToken(token) },
     include: {
@@ -47,6 +51,8 @@ export default async function CasePage({ params }: PageProps<"/p/[token]">) {
       ? addBusinessDays(data.infracao.data_rececao, c.category.defenseDeadlineDays)
       : null;
   const pay = payAction.bind(null, token);
+  const cancelPayment = cancelPaymentAction.bind(null, token);
+  const provider = getPaymentProvider();
   const complete = completeFieldsAction.bind(null, token);
   const instructions = pending?.instructions as
     | { entity?: string; reference?: string; expiresAt?: string; phoneMasked?: string; redirectUrl?: string; message: string }
@@ -150,10 +156,16 @@ export default async function CasePage({ params }: PageProps<"/p/[token]">) {
                       [Desenvolvimento] Simular resposta do gateway
                     </Link>
                   )}
+                  {env.paymentProvider !== "mock" && pending.method === "CARD" && instructions.redirectUrl && (
+                    <a href={instructions.redirectUrl} className="btn btn-primary">Continuar para a página de pagamento</a>
+                  )}
                   <p className="text-xs text-ink-400">Esta página atualiza automaticamente.</p>
+                  <form action={cancelPayment}>
+                    <button className="text-xs text-ink-500 underline">Escolher outro método de pagamento</button>
+                  </form>
                 </div>
               ) : (
-                <PaymentForm action={pay} priceLabel={eur(c.category.priceCents)} />
+                <PaymentForm action={pay} priceLabel={eur(c.category.priceCents)} methods={provider.methods} />
               )}
             </section>
           )}

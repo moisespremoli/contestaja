@@ -19,14 +19,23 @@ const METHODS = [
   { value: "MULTIBANCO", title: "Referência Multibanco", description: "Pague no ATM ou homebanking." },
 ] as const;
 
-export function PaymentForm({ action, priceLabel }: { action: (s: ActionState, f: FormData) => Promise<ActionState>; priceLabel: string }) {
+export function PaymentForm({
+  action,
+  priceLabel,
+  methods,
+}: {
+  action: (s: ActionState, f: FormData) => Promise<ActionState>;
+  priceLabel: string;
+  methods: string[];
+}) {
   const [state, formAction, pending] = useActionState(action, undefined);
-  const [method, setMethod] = useState<string>("MBWAY");
+  const available = METHODS.filter((m) => methods.includes(m.value));
+  const [method, setMethod] = useState<string>(available[0]?.value ?? "");
   return (
     <form action={formAction} className="space-y-5">
       <fieldset className="grid gap-3 sm:grid-cols-3">
         <legend className="sr-only">Método de pagamento</legend>
-        {METHODS.map((m) => (
+        {available.map((m) => (
           <label
             key={m.value}
             className={`cursor-pointer rounded-2xl border p-4 transition ${

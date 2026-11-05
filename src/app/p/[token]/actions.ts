@@ -1,9 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { env } from "@/lib/env";
+import { PAYMENT_RETURN_COOKIE } from "@/modules/payments/types";
 import { db } from "@/lib/db";
 import { clientIp, rateLimit } from "@/lib/request";
-import { hashAccessToken, missingRequiredFields, patchCaseData, startPayment } from "@/modules/cases/service";
+import { cancelPendingPayment, hashAccessToken, missingRequiredFields, patchCaseData, startPayment } from "@/modules/cases/service";
 import { isValidPhone } from "@/modules/fields/validators";
 import { ZodError } from "zod";
 
@@ -22,13 +26,34 @@ export async function payAction(token: string, _prev: ActionState, form: FormDat
   if (!["MBWAY", "CARD", "MULTIBANCO"].includes(method)) return { error: "Escolha um método de pagamento." };
   const phone = String(form.get("phone") ?? "").replace(/\D/g, "").replace(/^351/, "");
   if (method === "MBWAY" && !isValidPhone(phone)) return { error: "Indique um número de telemóvel MB WAY válido." };
+  let redirectUrl: string | undefined;
   try {
-    await startPayment(c.id, method as "MBWAY" | "CARD" | "MULTIBANCO", phone || undefined, { type: "CLIENT", ip });
+    const payment = await startPayment(c.id, method as "MBWAY" | "CARD" | "MULTIBANCO", phone || undefined, { type: "CLIENT", ip });
+    redirectUrl = (payment.instructions as { redirectUrl?: string } | null)?.redirectUrl;
   } catch (e) {
+    console.error("[pay]", e);
     return { error: e instanceof Error ? e.message : "Não foi possível iniciar o pagamento." };
+  }
+  if (method === "CARD") {
+    // Permite devolver o cliente à sua área do processo após a página do gateway.
+    (await cookies()).set(PAYMENT_RETURN_COOKIE, token, {
+      httpOnly: true,
+      secure: env.isProduction,
+      sameSite: "lax",
+      path: "/api/payments",
+      maxAge: 60 * 60,
+    });
+    if (redirectUrl?.startsWith("https://")) redirect(redirectUrl);
   }
   revalidatePath(`/p/${token}`);
   return { ok: true };
+}
+
+export async function cancelPaymentAction(token: string) {
+  const c = await caseFor(token);
+  if (!c) return;
+  await cancelPendingPayment(c.id, { type: "CLIENT", ip: await clientIp() });
+  revalidatePath(`/p/${token}`);
 }
 
 export async function completeFieldsAction(token: string, _prev: ActionState, form: FormData): Promise<ActionState> {

@@ -34,6 +34,21 @@ que envia um webhook assinado, tal como um gateway real.
 
 Sem `SMTP_URL`, os emails são gravados em `storage/outbox/*.eml`.
 
+## Pagamentos ifthenpay
+
+1. Pedir à ifthenpay as chaves MB KEY, MBWAY KEY e CCARD KEY (e chaves de teste para sandbox) e a BACKOFFICE KEY.
+2. No `.env`: `PAYMENT_PROVIDER="ifthenpay"`, as chaves, uma `IFTHENPAY_ANTI_PHISHING_KEY` aleatória e `APP_URL` público em https.
+3. Ativar os callbacks: `npm run ifthenpay:callback` (ou pedir à ifthenpay, indicando os URLs abaixo).
+
+| Endpoint | Função |
+|---|---|
+| `GET /api/payments/ifthenpay/callback?key=[ANTI_PHISHING_KEY]&orderId=[ORDER_ID]&amount=[AMOUNT]&requestId=[REQUEST_ID]…` | Confirmação de pagamento (todos os métodos); valida chave anti-phishing e valor |
+| `POST /api/payments/ifthenpay/notification` | Estado final MB WAY (pago/recusado/expirado), assinatura HMAC-SHA256 com a MB WAY Key |
+| `GET /api/payments/ifthenpay/return` | Regresso do cliente após cartão; valida a assinatura `sk` |
+
+Enquanto o cliente aguarda na página do processo, o estado MB WAY é também consultado ativamente.
+Sandbox de cartão: 4012 0010 3714 1112 · CVC 212 · 12/27.
+
 ## Scripts
 
 | Comando | Descrição |
@@ -42,6 +57,7 @@ Sem `SMTP_URL`, os emails são gravados em `storage/outbox/*.eml`.
 | `npm run typecheck` | Verificação TypeScript |
 | `npm run build` | Build de produção |
 | `npm run db:seed` | Dados iniciais de desenvolvimento |
+| `npm run ifthenpay:callback` | Ativa os callbacks ifthenpay |
 | `npm run retention:purge` | Política RGPD de conservação/eliminação (agendar diariamente) |
 
 ## Minutas

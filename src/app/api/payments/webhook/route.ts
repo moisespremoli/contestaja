@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
+import { env } from "@/lib/env";
 import { handlePaymentEvent } from "@/modules/cases/service";
-import { getPaymentProvider } from "@/modules/payments";
+import { parseMockWebhook } from "@/modules/payments/mock";
 
-/** Webhook do gateway de pagamentos. Única via para confirmar um pagamento. */
+/** Webhook do simulador de pagamentos (apenas PAYMENT_PROVIDER=mock). */
 export async function POST(req: Request) {
+  if (env.paymentProvider !== "mock") return NextResponse.json({ error: "indisponível" }, { status: 404 });
   const body = await req.text();
-  const provider = getPaymentProvider();
-  const event = await provider.parseWebhook(body, req.headers);
+  const event = parseMockWebhook(env.paymentWebhookSecret, body, req.headers);
   if (!event) return NextResponse.json({ error: "assinatura inválida" }, { status: 401 });
   const result = await handlePaymentEvent(event);
-  if (!result.ok) return NextResponse.json(result, { status: 404 });
-  return NextResponse.json(result);
+  return NextResponse.json(result, { status: result.ok ? 200 : 404 });
 }
