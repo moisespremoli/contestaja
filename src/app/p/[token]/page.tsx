@@ -12,6 +12,7 @@ import {
   STATUS_LABELS,
   syncPendingPayments,
 } from "@/modules/cases/service";
+import { PROCESS_TYPE_LABELS } from "@/modules/cases/labels";
 import { catalogField } from "@/modules/fields/catalog";
 import { formatDateLong } from "@/modules/fields/format";
 import { getPaymentProvider, METHOD_LABELS } from "@/modules/payments";
@@ -37,9 +38,11 @@ export default async function CasePage({ params }: PageProps<"/p/[token]">) {
       category: true,
       payments: { orderBy: { createdAt: "desc" } },
       documents: { orderBy: { createdAt: "desc" } },
+      templateVersion: { include: { template: true } },
     },
   });
   if (!c || c.anonymizedAt) notFound();
+  const docType = c.templateVersion ? PROCESS_TYPE_LABELS[c.templateVersion.template.processType] : undefined;
 
   const data = caseData(c);
   const missing = c.status === "AWAITING_PAYMENT" ? await missingRequiredFields(c) : [];
@@ -134,6 +137,12 @@ export default async function CasePage({ params }: PageProps<"/p/[token]">) {
             <section className="card space-y-5 p-6">
               <div>
                 <h2 className="text-lg font-semibold">Existe uma minuta adequada ao seu caso</h2>
+                {docType && (
+                  <div className="mt-3 rounded-xl bg-ink-50 p-3 text-sm">
+                    <p className="font-medium">Documento aplicável: {docType.title}</p>
+                    <p className="mt-0.5 text-ink-500">{docType.description}</p>
+                  </div>
+                )}
                 <p className="mt-1 text-ink-600">
                   Conclua o pagamento de <b>{eur(c.category.priceCents)}</b> para gerar o documento. O PDF só é disponibilizado após a confirmação do pagamento.
                 </p>

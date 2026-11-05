@@ -94,6 +94,7 @@ export const requerenteSingularSchema = z.object({
   doc_tipo: z.enum(keys(DOC_TIPOS)),
   doc_numero: req("Indique o número do documento de identificação"),
   doc_validade: isoDateOpt,
+  doc_emitente: opt,
   ...contactos,
 });
 
@@ -133,6 +134,9 @@ export const condutorSchema = z
     nif: nifOpt,
     carta_conducao: opt,
     morada: opt,
+    doc_tipo: z.enum(keys(DOC_TIPOS)).optional().or(z.literal("").transform(() => undefined)),
+    doc_numero: opt,
+    doc_emitente: opt,
   })
   .refine((c) => c.identificacao !== "OUTRA_PESSOA" || !!c.nome, {
     message: "Indique o nome do condutor",
@@ -154,6 +158,16 @@ export const infracaoSchema = z
     entidade_autuante_outra: opt,
     data_notificacao: isoDateOpt,
     data_rececao: isoDate("Indique a data em que recebeu a notificação"),
+    np: opt,
+    entidade_numero: opt,
+    entidade_morada: opt,
+    entidade_codigo_postal: z
+      .string()
+      .trim()
+      .optional()
+      .refine((v) => !v || isValidPostalCode(v), "Código postal inválido (0000-000)")
+      .transform((v) => v || undefined),
+    entidade_localidade: opt,
   })
   .refine((i) => i.velocidade_considerada > i.velocidade_maxima, {
     message: "A velocidade considerada deve ser superior à máxima permitida",

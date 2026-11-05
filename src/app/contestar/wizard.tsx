@@ -29,17 +29,18 @@ type Errors = Record<string, string>;
 const empty = {
   tipo: "" as "" | "SINGULAR" | "COLETIVA",
   requerente: {
-    nome: "", nif: "", doc_tipo: "CC", doc_numero: "", doc_validade: "",
+    nome: "", nif: "", doc_tipo: "CC", doc_numero: "", doc_validade: "", doc_emitente: "",
     denominacao: "", nipc: "", morada: "", codigo_postal: "", localidade: "", email: "", telefone: "",
   },
   representante: { nome: "", nif: "", cargo: "", doc_numero: "" },
   veiculo: { matricula: "", marca_modelo: "" },
   titular: { e_requerente: "" as "" | "sim" | "nao", nome: "", nif: "" },
-  condutor: { identificacao: "", nome: "", nif: "", carta_conducao: "", morada: "" },
+  condutor: { identificacao: "", nome: "", nif: "", carta_conducao: "", morada: "", doc_tipo: "CC", doc_numero: "", doc_emitente: "" },
   infracao: {
     numero_auto: "", data: "", hora: "", local: "", tipo_via: "NAO_SEI", meio_detecao: "NAO_SEI",
     velocidade_maxima: "", velocidade_registada: "", velocidade_considerada: "",
     entidade_autuante: "", entidade_autuante_outra: "", data_notificacao: "", data_rececao: "",
+    np: "", entidade_numero: "", entidade_morada: "", entidade_codigo_postal: "", entidade_localidade: "",
   },
   adicional: { descricao: "", observacoes: "" },
 };
@@ -60,14 +61,14 @@ function buildPayload(f: FormState) {
   const requerente =
     f.tipo === "COLETIVA"
       ? { tipo: "COLETIVA" as const, denominacao: r.denominacao, nipc: r.nipc, ...contactos }
-      : { tipo: "SINGULAR" as const, nome: r.nome, nif: r.nif, doc_tipo: r.doc_tipo, doc_numero: r.doc_numero, doc_validade: r.doc_validade, ...contactos };
+      : { tipo: "SINGULAR" as const, nome: r.nome, nif: r.nif, doc_tipo: r.doc_tipo, doc_numero: r.doc_numero, doc_validade: r.doc_validade, doc_emitente: r.doc_emitente, ...contactos };
   return {
     categoria: "EXCESSO_VELOCIDADE",
     requerente,
     representante: f.tipo === "COLETIVA" ? f.representante : undefined,
     veiculo: f.veiculo,
     titular: { e_requerente: f.titular.e_requerente === "sim", nome: f.titular.nome, nif: f.titular.nif },
-    condutor: f.condutor,
+    condutor: f.condutor.identificacao === "OUTRA_PESSOA" ? f.condutor : { identificacao: f.condutor.identificacao },
     infracao: f.infracao,
     adicional: f.adicional,
   };
@@ -243,6 +244,9 @@ export function Wizard({ priceLabel }: { priceLabel: string }) {
                   <Field label="Validade do documento" optional error={err("requerente.doc_validade")}>
                     <TextInput type="date" value={f.requerente.doc_validade} onChange={(v) => set("requerente", "doc_validade", v)} />
                   </Field>
+                  <Field label="Entidade emissora do documento" optional hint="Ex.: República Portuguesa.">
+                    <TextInput value={f.requerente.doc_emitente} onChange={(v) => set("requerente", "doc_emitente", v)} />
+                  </Field>
                 </>
               )}
               <Field label={isPC ? "Sede (morada)" : "Morada"} error={err("requerente.morada")} className="sm:col-span-2">
@@ -342,6 +346,15 @@ export function Wizard({ priceLabel }: { priceLabel: string }) {
                   <Field label="Morada do condutor" optional>
                     <TextInput value={f.condutor.morada} onChange={(v) => set("condutor", "morada", v)} />
                   </Field>
+                  <Field label="Documento de identificação do condutor">
+                    <SelectInput value={f.condutor.doc_tipo} onChange={(v) => set("condutor", "doc_tipo", v)} options={DOC_TIPOS} />
+                  </Field>
+                  <Field label="N.º do documento do condutor" optional>
+                    <TextInput value={f.condutor.doc_numero} onChange={(v) => set("condutor", "doc_numero", v.toUpperCase())} />
+                  </Field>
+                  <Field label="Entidade emissora do documento do condutor" optional>
+                    <TextInput value={f.condutor.doc_emitente} onChange={(v) => set("condutor", "doc_emitente", v)} />
+                  </Field>
                 </div>
               )}
               {f.titular.e_requerente === "nao" && f.condutor.identificacao && f.condutor.identificacao !== "REQUERENTE" && (
@@ -377,6 +390,21 @@ export function Wizard({ priceLabel }: { priceLabel: string }) {
                   <TextInput value={f.infracao.entidade_autuante_outra} onChange={(v) => set("infracao", "entidade_autuante_outra", v)} error={!!err("infracao.entidade_autuante_outra")} />
                 </Field>
               )}
+              <Field label="N.º da entidade autuante" optional hint="Código numérico que consta na notificação.">
+                <TextInput value={f.infracao.entidade_numero} onChange={(v) => set("infracao", "entidade_numero", v)} />
+              </Field>
+              <Field label="NP" optional hint="Se constar na notificação.">
+                <TextInput value={f.infracao.np} onChange={(v) => set("infracao", "np", v.toUpperCase())} />
+              </Field>
+              <Field label="Morada da entidade autuante" optional hint="Morada para onde deve ser enviada a resposta, conforme a notificação." className="sm:col-span-2">
+                <TextInput value={f.infracao.entidade_morada} onChange={(v) => set("infracao", "entidade_morada", v)} />
+              </Field>
+              <Field label="Código postal da entidade" optional error={err("infracao.entidade_codigo_postal")}>
+                <TextInput value={f.infracao.entidade_codigo_postal} onChange={(v) => set("infracao", "entidade_codigo_postal", v)} mask={masks.postal} placeholder="0000-000" inputMode="numeric" error={!!err("infracao.entidade_codigo_postal")} />
+              </Field>
+              <Field label="Localidade da entidade" optional>
+                <TextInput value={f.infracao.entidade_localidade} onChange={(v) => set("infracao", "entidade_localidade", v)} />
+              </Field>
               <Field label="Data da infração" error={err("infracao.data")}>
                 <TextInput type="date" value={f.infracao.data} onChange={(v) => set("infracao", "data", v)} error={!!err("infracao.data")} />
               </Field>

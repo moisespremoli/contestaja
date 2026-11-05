@@ -52,3 +52,6 @@ next-env.d.ts
 /.windsurf
 /.claude/skills
 skills-lock.json
+
+# minutas reais (privadas) — nunca no repositório público
+/minutas-privadas

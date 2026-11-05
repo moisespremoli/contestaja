@@ -65,7 +65,11 @@ export function buildContext(d: CaseData, opts: DeriveOptions = {}) {
       morada_completa: `${r.morada}, ${r.codigo_postal} ${r.localidade}`,
     },
     titular: { ...d.titular, nome_efetivo: titularNome },
-    condutor: { ...d.condutor, nome_efetivo: condutorNome },
+    condutor: {
+      ...d.condutor,
+      nome_efetivo: condutorNome,
+      doc_tipo_extenso: d.condutor.doc_tipo ? DOC_TIPOS[d.condutor.doc_tipo] : undefined,
+    },
     infracao: {
       ...d.infracao,
       entidade_autuante_extenso: entidade,

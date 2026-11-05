@@ -10,3 +10,16 @@ export const STATUS_LABELS: Record<CaseStatus, string> = {
   DELIVERED: "Entregue ao cliente",
   REJECTED_NO_TEMPLATE: "Rejeitado / sem minuta adequada",
 };
+
+/** Designação pública do tipo de documento (Template.processType). */
+export const PROCESS_TYPE_LABELS: Record<string, { title: string; description: string }> = {
+  DEFESA_ESCRITA: {
+    title: "Defesa escrita (contestação)",
+    description: "Documento de defesa relativo ao auto de contraordenação.",
+  },
+  IDENTIFICACAO_CONDUTOR: {
+    title: "Identificação do condutor",
+    description:
+      "Como indicou que não era o condutor, o documento aplicável é a identificação do condutor à entidade autuante, para que o processo prossiga contra quem conduzia.",
+  },
+};
