@@ -100,6 +100,17 @@ export function buildContext(d: CaseData, opts: DeriveOptions = {}) {
       tem_data_notificacao: !!d.infracao.data_notificacao,
       tem_descricao: !!d.adicional?.descricao,
       tem_observacoes: !!d.adicional?.observacoes,
+      defesa_tem_normas: !!d.defesa?.normas_infringidas,
+      defesa_foto_ilegivel: !!d.defesa?.foto_ilegivel,
+      defesa_tem_equipamento: !!d.defesa?.auto_equipamento,
+      defesa_tem_data_verificacao: !!d.defesa?.data_ultima_verificacao,
+      defesa_sem_antecedentes: !!d.defesa?.sem_antecedentes,
+      defesa_tem_anos_carta: d.defesa?.anos_carta != null,
+      defesa_boas_condicoes: !!d.defesa?.boas_condicoes,
+      defesa_nao_pagou: !!d.defesa?.nao_pagou,
+      defesa_pede_dispensa_sancao: !!d.defesa?.pede_dispensa_sancao,
+      defesa_unico_condutor_agregado: !!d.defesa?.unico_condutor_agregado,
+      defesa_tem_necessidade_carta: !!d.defesa?.necessidade_carta,
     },
   };
 }

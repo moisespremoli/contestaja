@@ -43,6 +43,19 @@ const empty = {
     np: "", entidade_numero: "", entidade_morada: "", entidade_codigo_postal: "", entidade_localidade: "",
   },
   adicional: { descricao: "", observacoes: "" },
+  defesa: {
+    normas_infringidas: "",
+    foto_ilegivel: false,
+    auto_equipamento: "",
+    data_ultima_verificacao: "",
+    sem_antecedentes: false,
+    anos_carta: "",
+    boas_condicoes: false,
+    nao_pagou: false,
+    pede_dispensa_sancao: false,
+    unico_condutor_agregado: false,
+    necessidade_carta: "",
+  },
 };
 type FormState = typeof empty;
 
@@ -71,6 +84,7 @@ function buildPayload(f: FormState) {
     condutor: f.condutor.identificacao === "OUTRA_PESSOA" ? f.condutor : { identificacao: f.condutor.identificacao },
     infracao: f.infracao,
     adicional: f.adicional,
+    defesa: f.defesa,
   };
 }
 
@@ -98,6 +112,9 @@ export function Wizard({ priceLabel }: { priceLabel: string }) {
   }
 
   const err = (k: string) => errors[k];
+  const setDefesa = (patch: Partial<FormState["defesa"]>) => setF((p) => ({ ...p, defesa: { ...p.defesa, ...patch } }));
+  // Quem não conduzia e é titular recebe a identificação do condutor — as perguntas da defesa não se aplicam.
+  const isIdentificacao = f.titular.e_requerente === "sim" && f.condutor.identificacao === "OUTRA_PESSOA";
 
   function validate(s: number): Errors {
     const e: Errors = {};
@@ -459,6 +476,61 @@ export function Wizard({ priceLabel }: { priceLabel: string }) {
               <input type="file" multiple accept=".pdf,image/jpeg,image/png" onChange={(e) => setDocumentos(Array.from(e.target.files ?? []))} className="block w-full text-sm file:mr-4 file:rounded-lg file:border-0 file:bg-ink-100 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-ink-800" />
             </Field>
             {err("files") && <p className="text-sm text-red-600">{err("files")}</p>}
+
+            {!isIdentificacao && (
+              <div className="space-y-5 border-t border-ink-100 pt-6">
+                <div>
+                  <h3 className="font-semibold">Circunstâncias para a defesa</h3>
+                  <p className="mt-1 text-sm text-ink-500">
+                    Assinale apenas o que for verdade e puder confirmar. Cada opção inclui no documento um parágrafo previamente
+                    elaborado; nada é acrescentado se não assinalar.
+                  </p>
+                </div>
+                <Field label="Normas infringidas indicadas na notificação" optional hint="Copie tal como consta (ex.: artigo e diploma).">
+                  <TextInput value={f.defesa.normas_infringidas} onChange={(v) => setDefesa({ normas_infringidas: v })} />
+                </Field>
+                <div className="space-y-3 text-sm">
+                  <Check checked={f.defesa.foto_ilegivel} onChange={(v) => setDefesa({ foto_ilegivel: v })}>
+                    A fotografia junta ao auto não permite identificar claramente o veículo ou a matrícula.
+                  </Check>
+                  <Check checked={f.defesa.sem_antecedentes} onChange={(v) => setDefesa({ sem_antecedentes: v })}>
+                    Não tenho antecedentes de contraordenações rodoviárias.
+                  </Check>
+                  <Check checked={f.defesa.boas_condicoes} onChange={(v) => setDefesa({ boas_condicoes: v })}>
+                    No momento, a via tinha boas condições de circulação e a visibilidade era boa.
+                  </Check>
+                  <Check checked={f.defesa.nao_pagou} onChange={(v) => setDefesa({ nao_pagou: v })}>
+                    Não paguei a coima.
+                  </Check>
+                </div>
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <Field label="Equipamento (radar) descrito no auto" optional hint="Copie a descrição do equipamento que consta no auto." className="sm:col-span-2">
+                    <TextInput value={f.defesa.auto_equipamento} onChange={(v) => setDefesa({ auto_equipamento: v })} />
+                  </Field>
+                  <Field label="Data da última verificação do equipamento" optional hint="Se constar no auto.">
+                    <TextInput type="date" value={f.defesa.data_ultima_verificacao} onChange={(v) => setDefesa({ data_ultima_verificacao: v })} />
+                  </Field>
+                  <Field label="Há quantos anos tem carta de condução?" optional>
+                    <TextInput value={f.defesa.anos_carta} onChange={(v) => setDefesa({ anos_carta: v })} mask={masks.digits(2)} inputMode="numeric" />
+                  </Field>
+                </div>
+                <div className="space-y-3 text-sm">
+                  <Check checked={f.defesa.pede_dispensa_sancao} onChange={(v) => setDefesa({ pede_dispensa_sancao: v })}>
+                    Pretendo pedir a dispensa ou suspensão da sanção acessória de inibição de conduzir.
+                  </Check>
+                  {f.defesa.pede_dispensa_sancao && (
+                    <div className="space-y-3 pl-7">
+                      <Check checked={f.defesa.unico_condutor_agregado} onChange={(v) => setDefesa({ unico_condutor_agregado: v })}>
+                        Sou a única pessoa do meu agregado familiar com carta de condução e veículo próprio.
+                      </Check>
+                      <Field label="Porque precisa da carta de condução?" optional hint="Ex.: deslocações profissionais, família, falta de transportes. Este texto é incluído no documento tal como o escrever.">
+                        <textarea rows={4} maxLength={3000} className="input" value={f.defesa.necessidade_carta} onChange={(e) => setDefesa({ necessidade_carta: e.target.value })} />
+                      </Field>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </section>
         )}
 

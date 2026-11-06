@@ -191,6 +191,25 @@ export const adicionalSchema = z.object({
   observacoes: z.string().trim().max(3000).optional(),
 });
 
+/**
+ * Circunstâncias confirmadas pelo cliente para a defesa. Cada uma apenas ativa parágrafos
+ * previamente aprovados na minuta — nunca gera texto novo.
+ */
+const flag = z.boolean().default(false);
+export const defesaSchema = z.object({
+  normas_infringidas: z.string().trim().max(300).optional().transform((v) => v || undefined),
+  foto_ilegivel: flag,
+  auto_equipamento: z.string().trim().max(500).optional().transform((v) => v || undefined),
+  data_ultima_verificacao: isoDateOpt,
+  sem_antecedentes: flag,
+  anos_carta: z.coerce.number().int().min(0).max(80).optional().or(z.literal("").transform(() => undefined)),
+  boas_condicoes: flag,
+  nao_pagou: flag,
+  pede_dispensa_sancao: flag,
+  unico_condutor_agregado: flag,
+  necessidade_carta: z.string().trim().max(3000).optional().transform((v) => v || undefined),
+});
+
 export const caseDataSchema = z
   .object({
     categoria: z.string().min(1),
@@ -201,6 +220,7 @@ export const caseDataSchema = z
     condutor: condutorSchema,
     infracao: infracaoSchema,
     adicional: adicionalSchema.default({}),
+    defesa: defesaSchema.prefault({}),
   })
   .superRefine((d, ctx) => {
     if (d.requerente.tipo === "COLETIVA" && !d.representante) {

@@ -68,6 +68,12 @@ export const FIELD_CATALOG: CatalogField[] = [
   // Informação adicional
   { path: "adicional.descricao", label: "Descrição do cliente", type: "text", group: "Adicional" },
   { path: "adicional.observacoes", label: "Observações", type: "text", group: "Adicional" },
+  // Defesa (circunstâncias confirmadas pelo cliente)
+  { path: "defesa.normas_infringidas", label: "Normas infringidas (conforme a notificação)", type: "text", group: "Defesa" },
+  { path: "defesa.auto_equipamento", label: "Equipamento descrito no auto", type: "text", group: "Defesa" },
+  { path: "defesa.data_ultima_verificacao", label: "Data da última verificação do equipamento", type: "date", group: "Defesa" },
+  { path: "defesa.anos_carta", label: "Anos de carta de condução", type: "number", group: "Defesa" },
+  { path: "defesa.necessidade_carta", label: "Motivos da necessidade da carta (texto do cliente)", type: "text", group: "Defesa" },
   // Minuta (metadados validados juridicamente)
   { path: "minuta.entidade_competente", label: "Entidade competente (definida na minuta)", type: "text", group: "Minuta" },
   { path: "minuta.codigo", label: "Código da minuta", type: "text", group: "Minuta" },
@@ -92,6 +98,17 @@ export const FIELD_CATALOG: CatalogField[] = [
   { path: "flags.tem_data_notificacao", label: "Data de notificação indicada", type: "boolean", group: "Condições" },
   { path: "flags.tem_descricao", label: "Cliente descreveu o sucedido", type: "boolean", group: "Condições" },
   { path: "flags.tem_observacoes", label: "Tem observações", type: "boolean", group: "Condições" },
+  { path: "flags.defesa_tem_normas", label: "Defesa: normas infringidas indicadas", type: "boolean", group: "Condições" },
+  { path: "flags.defesa_foto_ilegivel", label: "Defesa: fotografia do auto ilegível", type: "boolean", group: "Condições" },
+  { path: "flags.defesa_tem_equipamento", label: "Defesa: equipamento identificado no auto", type: "boolean", group: "Condições" },
+  { path: "flags.defesa_tem_data_verificacao", label: "Defesa: data da última verificação indicada", type: "boolean", group: "Condições" },
+  { path: "flags.defesa_sem_antecedentes", label: "Defesa: sem antecedentes contraordenacionais", type: "boolean", group: "Condições" },
+  { path: "flags.defesa_tem_anos_carta", label: "Defesa: anos de carta indicados", type: "boolean", group: "Condições" },
+  { path: "flags.defesa_boas_condicoes", label: "Defesa: boas condições de via e visibilidade", type: "boolean", group: "Condições" },
+  { path: "flags.defesa_nao_pagou", label: "Defesa: coima não paga", type: "boolean", group: "Condições" },
+  { path: "flags.defesa_pede_dispensa_sancao", label: "Defesa: pede dispensa da sanção acessória", type: "boolean", group: "Condições" },
+  { path: "flags.defesa_unico_condutor_agregado", label: "Defesa: único condutor do agregado", type: "boolean", group: "Condições" },
+  { path: "flags.defesa_tem_necessidade_carta", label: "Defesa: descreveu a necessidade da carta", type: "boolean", group: "Condições" },
 ];
 
 /** Campos usados em condições de seleção (para o editor de condições). */
