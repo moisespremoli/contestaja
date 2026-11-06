@@ -49,6 +49,19 @@ Sem `SMTP_URL`, os emails são gravados em `storage/outbox/*.eml`.
 Enquanto o cliente aguarda na página do processo, o estado MB WAY é também consultado ativamente.
 Sandbox de cartão: 4012 0010 3714 1112 · CVC 212 · 12/27.
 
+## Deploy (Railway)
+
+O serviço é construído a partir do `Dockerfile` (Next.js + LibreOffice). No arranque aplica as migrações
+(`prisma migrate deploy`) e o seed idempotente. Os documentos ficam no volume montado em `/data`.
+
+Variáveis necessárias: as do `.env.example`, com `DATABASE_URL=${{Postgres.DATABASE_URL}}`, `APP_URL` = domínio público
+e `STORAGE_DIR=/data/storage`. Em ambiente de teste:
+- `SITE_BASIC_AUTH="utilizador:palavra-passe"` protege todo o site (exceto webhooks de pagamento);
+- `PAYMENT_PROVIDER=mock` + `ALLOW_MOCK_PAYMENTS=true` ativa o simulador de pagamentos.
+
+Para produção real: remover `SITE_BASIC_AUTH` e `ALLOW_MOCK_PAYMENTS`, configurar `PAYMENT_PROVIDER=ifthenpay` e `SMTP_URL`,
+e desativar as minutas de teste no painel.
+
 ## Scripts
 
 | Comando | Descrição |
