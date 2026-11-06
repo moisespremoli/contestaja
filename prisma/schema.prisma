@@ -45,6 +45,8 @@ enum PaymentMethod {
   MBWAY
   CARD
   MULTIBANCO
+  /// Valor a zero por cupão de 100% (sem gateway).
+  COUPON
 }
 
 enum PaymentStatus {
@@ -188,9 +190,32 @@ model Case {
   files             CaseFile[]
   payments          Payment[]
   documents         GeneratedDocument[]
+  /// Cupão aplicado pelo cliente (desconto calculado no momento do pagamento).
+  couponId          String?
+  coupon            Coupon?             @relation(fields: [couponId], references: [id])
 
   @@index([status])
   @@index([createdAt])
+}
+
+/// Cupão de desconto. Um cupão de 100% conclui o pedido sem pagamento (ex.: testes reais).
+model Coupon {
+  id          String    @id @default(cuid())
+  /// Código em maiúsculas (ex.: CONTESTATESTE).
+  code        String    @unique
+  percentOff  Int
+  /// Limite de utilizações (null = ilimitado).
+  maxUses     Int?
+  usedCount   Int       @default(0)
+  validUntil  DateTime?
+  active      Boolean   @default(true)
+  /// Marca os processos como de teste (excluídos das métricas de receita).
+  isTest      Boolean   @default(false)
+  note        String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  cases       Case[]
+  payments    Payment[]
 }
 
 model CaseFile {
@@ -223,6 +248,9 @@ model Payment {
   instructions Json?
   raw          Json?
   confirmedAt  DateTime?
+  /// Cupão aplicado a este pagamento (amountCents já é o valor com desconto).
+  couponId     String?
+  coupon       Coupon?       @relation(fields: [couponId], references: [id])
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 

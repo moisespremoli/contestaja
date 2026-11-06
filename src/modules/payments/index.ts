@@ -34,4 +34,4 @@ export function getPaymentProvider(): PaymentProvider {
   }
 }
 
-export const METHOD_LABELS = { MBWAY: "MB WAY", CARD: "Cartão bancário", MULTIBANCO: "Referência Multibanco" } as const;
+export const METHOD_LABELS = { MBWAY: "MB WAY", CARD: "Cartão bancário", MULTIBANCO: "Referência Multibanco", COUPON: "Código promocional" } as const;

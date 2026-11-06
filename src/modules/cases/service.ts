@@ -11,6 +11,7 @@ import type { Method, WebhookEvent } from "@/modules/payments/types";
 import { selectTemplate, type SelectionResult } from "@/modules/selection/engine";
 import { storage } from "@/modules/storage";
 import type { ActorType, Case, CaseStatus, SelectionOutcome } from "@/generated/prisma/client";
+import { couponProblem, discountedCents, normalizeCouponCode, type CouponLike } from "@/modules/coupons/rules";
 import { buildContext } from "./derive";
 import { caseDataSchema, type CaseData } from "./schema";
 
@@ -219,11 +220,89 @@ function newOrderId() {
   return `CJ${randomToken(16).replace(/[^A-Za-z0-9]/g, "").slice(0, 13)}`;
 }
 
-export async function startPayment(caseId: string, method: Method, phone: string | undefined, actor: Actor) {
-  const c = await db.case.findUniqueOrThrow({ where: { id: caseId }, include: { category: true } });
+/** Valor a pagar pelo processo, com o cupão aplicado (se ainda for válido). */
+export function amountDue<C extends CouponLike>(c: { category: { priceCents: number }; coupon: C | null }) {
+  const valid = c.coupon && !couponProblem(c.coupon) ? c.coupon : null;
+  return { amountCents: discountedCents(c.category.priceCents, valid?.percentOff), coupon: valid };
+}
+
+async function payableCase(caseId: string) {
+  const c = await db.case.findUniqueOrThrow({ where: { id: caseId }, include: { category: true, coupon: true } });
   if (c.status !== "AWAITING_PAYMENT") throw new Error("Este processo não está a aguardar pagamento");
   if ((await missingRequiredFields(c)).length > 0) throw new Error("Existem dados obrigatórios em falta");
   if (await db.payment.count({ where: { caseId, status: "PENDING" } })) throw new Error("Já existe um pagamento pendente");
+  return c;
+}
+
+/** Aplica um código promocional ao processo (antes de iniciar o pagamento). */
+export async function applyCoupon(caseId: string, rawCode: string, actor: Actor) {
+  const c = await payableCase(caseId);
+  const code = normalizeCouponCode(rawCode);
+  const coupon = code ? await db.coupon.findUnique({ where: { code } }) : null;
+  const problem = couponProblem(coupon);
+  if (problem || !coupon) {
+    await audit({ actorType: actor.type, ip: actor.ip, action: "coupon.rejected", entityType: "Case", entityId: caseId, meta: { code: code.slice(0, 40), reason: problem } });
+    throw new Error(problem ?? "Código promocional inválido.");
+  }
+  await db.case.update({ where: { id: c.id }, data: { couponId: coupon.id } });
+  await audit({ actorType: actor.type, ip: actor.ip, action: "coupon.applied", entityType: "Case", entityId: caseId, meta: { code: coupon.code, percentOff: coupon.percentOff } });
+  return coupon;
+}
+
+export async function removeCoupon(caseId: string, actor: Actor) {
+  const c = await payableCase(caseId);
+  if (!c.couponId) return;
+  await db.case.update({ where: { id: c.id }, data: { couponId: null } });
+  await audit({ actorType: actor.type, ip: actor.ip, action: "coupon.removed", entityType: "Case", entityId: caseId });
+}
+
+/** Reserva uma utilização do cupão de forma atómica (respeita limite, validade e estado). */
+async function claimCouponUse(couponId: string) {
+  const n = await db.$executeRaw`
+    UPDATE "Coupon" SET "usedCount" = "usedCount" + 1, "updatedAt" = now()
+    WHERE "id" = ${couponId} AND "active" = true
+      AND ("maxUses" IS NULL OR "usedCount" < "maxUses")
+      AND ("validUntil" IS NULL OR "validUntil" > now())`;
+  return n === 1;
+}
+
+/**
+ * Conclui um processo cujo valor a pagar é 0 € (cupão de 100%), sem passar pelo gateway.
+ * Fica registado um pagamento CONFIRMED de 0 € com o cupão, para auditoria.
+ */
+export async function completeWithCoupon(caseId: string, actor: Actor) {
+  const c = await payableCase(caseId);
+  const { amountCents, coupon } = amountDue(c);
+  if (!coupon || amountCents !== 0) throw new Error("Este processo requer pagamento.");
+  if (!(await claimCouponUse(coupon.id))) throw new Error("Este código promocional já não é válido.");
+  const moved = await db.case.updateMany({ where: { id: caseId, status: "AWAITING_PAYMENT" }, data: { status: "PAYMENT_CONFIRMED" } });
+  if (moved.count !== 1) {
+    await db.coupon.update({ where: { id: coupon.id }, data: { usedCount: { decrement: 1 } } });
+    throw new Error("Este processo não está a aguardar pagamento");
+  }
+  const payment = await db.payment.create({
+    data: {
+      caseId,
+      provider: "coupon",
+      method: "COUPON",
+      amountCents: 0,
+      status: "CONFIRMED",
+      confirmedAt: new Date(),
+      providerRef: newOrderId(),
+      couponId: coupon.id,
+      instructions: { message: `Código promocional ${coupon.code} (${coupon.percentOff}%)` },
+    },
+  });
+  await audit({ actorType: actor.type, ip: actor.ip, action: "payment.coupon_confirmed", entityType: "Case", entityId: caseId, meta: { paymentId: payment.id, code: coupon.code, isTest: coupon.isTest } });
+  await processPaidCase(caseId);
+  return payment;
+}
+
+export async function startPayment(caseId: string, method: Method, phone: string | undefined, actor: Actor) {
+  const c = await payableCase(caseId);
+  const { amountCents, coupon } = amountDue(c);
+  if (c.couponId && !coupon) throw new Error("O código promocional aplicado já não é válido. Remova-o para continuar.");
+  if (amountCents <= 0) throw new Error("Não há valor a pagar — conclua o pedido com o código promocional.");
   const provider = getPaymentProvider();
   if (!provider.methods.includes(method)) throw new Error("Método de pagamento indisponível");
 
@@ -233,7 +312,7 @@ export async function startPayment(caseId: string, method: Method, phone: string
     caseId,
     caseReference: c.reference,
     orderId,
-    amountCents: c.category.priceCents,
+    amountCents,
     method,
     phone,
     email: c.email,
@@ -250,13 +329,14 @@ export async function startPayment(caseId: string, method: Method, phone: string
       caseId,
       provider: provider.name,
       method,
-      amountCents: c.category.priceCents,
+      amountCents,
+      couponId: coupon?.id ?? null,
       providerRef: orderId,
       providerRequestId: created.providerRequestId ?? null,
       instructions: created.instructions,
     },
   });
-  await audit({ actorType: actor.type, ip: actor.ip, action: "payment.created", entityType: "Case", entityId: caseId, meta: { method, paymentId: payment.id, provider: provider.name } });
+  await audit({ actorType: actor.type, ip: actor.ip, action: "payment.created", entityType: "Case", entityId: caseId, meta: { method, paymentId: payment.id, provider: provider.name, amountCents, coupon: coupon?.code } });
   return payment;
 }
 
@@ -273,7 +353,8 @@ export async function syncPendingPayments(caseId: string) {
   const pending = await db.payment.findMany({ where: { caseId, status: "PENDING", provider: provider.name } });
   for (const p of pending) {
     try {
-      const event = await provider.checkStatus(p);
+      if (p.method === "COUPON") continue;
+      const event = await provider.checkStatus({ ...p, method: p.method });
       if (event) await handlePaymentEvent(event);
     } catch (err) {
       console.error("[payments] falha ao consultar estado", p.id, err);
@@ -306,6 +387,8 @@ export async function handlePaymentEvent(event: WebhookEvent) {
     return { ok: true as const, duplicate: true };
   }
   if (event.status === "CONFIRMED") {
+    // Pagamento com desconto: conta a utilização do cupão (já foi pago, por isso não se recusa).
+    if (payment.couponId) await db.coupon.update({ where: { id: payment.couponId }, data: { usedCount: { increment: 1 } } });
     await db.case.update({ where: { id: payment.caseId }, data: { status: "PAYMENT_CONFIRMED" } });
     await processPaidCase(payment.caseId);
   }

@@ -91,3 +91,30 @@ export function MissingFieldsForm({
     </form>
   );
 }
+
+export function CouponForm({ action }: { action: (s: ActionState, f: FormData) => Promise<ActionState> }) {
+  const [state, formAction, pending] = useActionState(action, undefined);
+  return (
+    <details className="group rounded-2xl border border-ink-200 p-4" open={!!state?.error}>
+      <summary className="cursor-pointer text-sm font-medium text-ink-700">Tem um código promocional?</summary>
+      <form action={formAction} className="mt-3 flex flex-wrap gap-2">
+        <label className="sr-only" htmlFor="coupon">Código promocional</label>
+        <input id="coupon" name="code" autoComplete="off" autoCapitalize="characters" placeholder="CÓDIGO" className="input max-w-xs font-mono uppercase" />
+        <button className="btn btn-ghost" disabled={pending}>{pending ? "A validar…" : "Aplicar"}</button>
+      </form>
+      {state?.error && <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">{state.error}</p>}
+    </details>
+  );
+}
+
+export function FreeCompleteForm({ action }: { action: (s: ActionState) => Promise<ActionState> }) {
+  const [state, formAction, pending] = useActionState(action, undefined);
+  return (
+    <form action={formAction} className="space-y-3">
+      {state?.error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{state.error}</p>}
+      <button className="btn btn-accent w-full sm:w-auto" disabled={pending}>
+        {pending ? "A concluir…" : "Concluir pedido sem pagamento"}
+      </button>
+    </form>
+  );
+}

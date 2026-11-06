@@ -7,7 +7,16 @@ import { env } from "@/lib/env";
 import { PAYMENT_RETURN_COOKIE } from "@/modules/payments/types";
 import { db } from "@/lib/db";
 import { clientIp, rateLimit } from "@/lib/request";
-import { cancelPendingPayment, hashAccessToken, missingRequiredFields, patchCaseData, startPayment } from "@/modules/cases/service";
+import {
+  applyCoupon,
+  cancelPendingPayment,
+  completeWithCoupon,
+  hashAccessToken,
+  missingRequiredFields,
+  patchCaseData,
+  removeCoupon,
+  startPayment,
+} from "@/modules/cases/service";
 import { isValidPhone } from "@/modules/fields/validators";
 import { ZodError } from "zod";
 
@@ -70,6 +79,49 @@ export async function completeFieldsAction(token: string, _prev: ActionState, fo
   } catch (e) {
     if (e instanceof ZodError) return { error: e.issues.map((i) => i.message).join(" · ") };
     return { error: e instanceof Error ? e.message : "Não foi possível guardar." };
+  }
+  revalidatePath(`/p/${token}`);
+  return { ok: true };
+}
+
+export async function applyCouponAction(token: string, _prev: ActionState, form: FormData): Promise<ActionState> {
+  const ip = await clientIp();
+  // Limite apertado: impede adivinhar códigos por força bruta.
+  if (!rateLimit(`coupon:${ip}`, 10, 60 * 60 * 1000)) return { error: "Demasiadas tentativas. Tente mais tarde." };
+  const c = await caseFor(token);
+  if (!c) return { error: "Processo não encontrado." };
+  const code = String(form.get("code") ?? "");
+  if (!code.trim()) return { error: "Indique o código promocional." };
+  try {
+    await applyCoupon(c.id, code, { type: "CLIENT", ip });
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Código promocional inválido." };
+  }
+  revalidatePath(`/p/${token}`);
+  return { ok: true };
+}
+
+export async function removeCouponAction(token: string) {
+  const c = await caseFor(token);
+  if (!c) return;
+  try {
+    await removeCoupon(c.id, { type: "CLIENT", ip: await clientIp() });
+  } catch (e) {
+    console.error("[coupon] remover", e);
+  }
+  revalidatePath(`/p/${token}`);
+}
+
+export async function completeFreeAction(token: string, _prev: ActionState): Promise<ActionState> {
+  const ip = await clientIp();
+  if (!rateLimit(`pay:${ip}`, 20, 60 * 60 * 1000)) return { error: "Demasiadas tentativas. Tente mais tarde." };
+  const c = await caseFor(token);
+  if (!c) return { error: "Processo não encontrado." };
+  try {
+    await completeWithCoupon(c.id, { type: "CLIENT", ip });
+  } catch (e) {
+    console.error("[coupon] concluir", e);
+    return { error: e instanceof Error ? e.message : "Não foi possível concluir o pedido." };
   }
   revalidatePath(`/p/${token}`);
   return { ok: true };

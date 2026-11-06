@@ -49,6 +49,15 @@ Sem `SMTP_URL`, os emails são gravados em `storage/outbox/*.eml`.
 Enquanto o cliente aguarda na página do processo, o estado MB WAY é também consultado ativamente.
 Sandbox de cartão: 4012 0010 3714 1112 · CVC 212 · 12/27.
 
+## Cupões e testes reais sem pagamento
+
+- O cliente introduz o código em **"Tem um código promocional?"** na página de pagamento do processo.
+- **`CONTESTATESTE`** (criado pelo seed): 100% de desconto, marcado como *teste*. Conclui o pedido sem gateway — fica
+  registado um pagamento de 0 € (método "Código promocional") e o documento é gerado/entregue exatamente como num pedido pago.
+- Processos concluídos com cupões de *teste* são excluídos das métricas do dashboard.
+- Gestão em **Admin → Cupões**: percentagem, limite de utilizações, data de validade, ativo/inativo.
+  Antes da abertura ao público: desativar `CONTESTATESTE` (ou limitar as utilizações). O seed não o volta a ativar.
+
 ## Deploy (Railway)
 
 O serviço é construído a partir do `Dockerfile` (Next.js + LibreOffice). No arranque aplica as migrações

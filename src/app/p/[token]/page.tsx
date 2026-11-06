@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { addBusinessDays } from "@/modules/cases/derive";
 import {
+  amountDue,
   caseData,
   documentDownloadUrl,
   hashAccessToken,
@@ -16,8 +17,8 @@ import { PROCESS_TYPE_LABELS } from "@/modules/cases/labels";
 import { catalogField } from "@/modules/fields/catalog";
 import { formatDateLong } from "@/modules/fields/format";
 import { getPaymentProvider, METHOD_LABELS } from "@/modules/payments";
-import { cancelPaymentAction, completeFieldsAction, payAction } from "./actions";
-import { AutoRefresh, MissingFieldsForm, PaymentForm } from "./client";
+import { applyCouponAction, cancelPaymentAction, completeFieldsAction, completeFreeAction, payAction, removeCouponAction } from "./actions";
+import { AutoRefresh, CouponForm, FreeCompleteForm, MissingFieldsForm, PaymentForm } from "./client";
 
 export const metadata = { title: "O seu processo", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -36,6 +37,7 @@ export default async function CasePage({ params }: PageProps<"/p/[token]">) {
     where: { accessTokenHash: hashAccessToken(token) },
     include: {
       category: true,
+      coupon: true,
       payments: { orderBy: { createdAt: "desc" } },
       documents: { orderBy: { createdAt: "desc" } },
       templateVersion: { include: { template: true } },
@@ -57,6 +59,8 @@ export default async function CasePage({ params }: PageProps<"/p/[token]">) {
   const cancelPayment = cancelPaymentAction.bind(null, token);
   const provider = getPaymentProvider();
   const complete = completeFieldsAction.bind(null, token);
+  const due = amountDue(c);
+  const couponInvalid = !!c.couponId && !due.coupon;
   const instructions = pending?.instructions as
     | { entity?: string; reference?: string; expiresAt?: string; phoneMasked?: string; redirectUrl?: string; message: string }
     | undefined;
@@ -143,10 +147,29 @@ export default async function CasePage({ params }: PageProps<"/p/[token]">) {
                     <p className="mt-0.5 text-ink-500">{docType.description}</p>
                   </div>
                 )}
-                <p className="mt-1 text-ink-600">
-                  Conclua o pagamento de <b>{eur(c.category.priceCents)}</b> para gerar o documento. O PDF só é disponibilizado após a confirmação do pagamento.
-                </p>
+                {due.amountCents > 0 ? (
+                  <p className="mt-1 text-ink-600">
+                    Conclua o pagamento de <b>{eur(due.amountCents)}</b>
+                    {due.coupon && <> <s className="text-ink-400">{eur(c.category.priceCents)}</s></>} para gerar o documento. O PDF só é
+                    disponibilizado após a confirmação do pagamento.
+                  </p>
+                ) : (
+                  <p className="mt-1 text-ink-600">
+                    Com o código promocional aplicado não há valor a pagar. Conclua o pedido para gerar o documento.
+                  </p>
+                )}
               </div>
+              {!pending && c.coupon && (
+                <div className={`flex flex-wrap items-center justify-between gap-2 rounded-xl p-3 text-sm ${couponInvalid ? "bg-red-50 text-red-700" : "bg-brand-50 text-ink-800"}`}>
+                  <span>
+                    Código <b className="font-mono">{c.coupon.code}</b>{" "}
+                    {couponInvalid ? "já não é válido." : `aplicado (−${c.coupon.percentOff}%).`}
+                  </span>
+                  <form action={removeCouponAction.bind(null, token)}>
+                    <button className="text-xs underline">Remover</button>
+                  </form>
+                </div>
+              )}
               {pending && instructions ? (
                 <div className="space-y-4 rounded-2xl bg-ink-50 p-5">
                   <AutoRefresh />
@@ -173,8 +196,13 @@ export default async function CasePage({ params }: PageProps<"/p/[token]">) {
                     <button className="text-xs text-ink-500 underline">Escolher outro método de pagamento</button>
                   </form>
                 </div>
+              ) : due.amountCents === 0 && due.coupon ? (
+                <FreeCompleteForm action={completeFreeAction.bind(null, token)} />
               ) : (
-                <PaymentForm action={pay} priceLabel={eur(c.category.priceCents)} methods={provider.methods} />
+                <div className="space-y-4">
+                  {!c.couponId && <CouponForm action={applyCouponAction.bind(null, token)} />}
+                  {!couponInvalid && <PaymentForm action={pay} priceLabel={eur(due.amountCents)} methods={provider.methods} />}
+                </div>
               )}
             </section>
           )}

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge, PageTitle, Panel, StatusBadge, eur, fmtDate } from "@/components/admin-ui";
 import { db } from "@/lib/db";
+import { METHOD_LABELS } from "@/modules/payments";
 import { clientIp } from "@/lib/request";
 import { audit } from "@/modules/audit";
 import { requireAdmin } from "@/modules/auth/session";
@@ -19,7 +20,7 @@ export default async function ProcessoDetalhe({ params, searchParams }: PageProp
     include: {
       category: true,
       files: true,
-      payments: { orderBy: { createdAt: "desc" } },
+      payments: { orderBy: { createdAt: "desc" }, include: { coupon: true } },
       documents: { orderBy: { createdAt: "desc" }, include: { templateVersion: { include: { template: true } } } },
       templateVersion: { include: { template: true } },
     },
@@ -131,7 +132,7 @@ export default async function ProcessoDetalhe({ params, searchParams }: PageProp
             <ul className="space-y-2 text-sm">
               {c.payments.map((p) => (
                 <li key={p.id} className="flex justify-between gap-2">
-                  <span>{p.method} · {eur(p.amountCents)}<span className="block text-xs text-ink-400">{p.provider} · {fmtDate(p.createdAt)}</span></span>
+                  <span>{METHOD_LABELS[p.method]} · {eur(p.amountCents)}{p.coupon && <> · cupão <b className="font-mono">{p.coupon.code}</b>{p.coupon.isTest && " (teste)"}</>}<span className="block text-xs text-ink-400">{p.provider} · {fmtDate(p.createdAt)}</span></span>
                   <Badge tone={p.status === "CONFIRMED" ? "green" : p.status === "PENDING" ? "amber" : "red"}>{p.status}</Badge>
                 </li>
               ))}

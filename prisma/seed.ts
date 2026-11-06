@@ -37,6 +37,19 @@ async function main() {
     },
   });
 
+  // Cupão de testes reais: 100% de desconto, conclui o pedido sem gateway.
+  // `update: {}` — se for desativado/alterado no painel, o seed não o reativa.
+  await db.coupon.upsert({
+    where: { code: "CONTESTATESTE" },
+    update: {},
+    create: {
+      code: "CONTESTATESTE",
+      percentOff: 100,
+      isTest: true,
+      note: "Testes internos (100%). Desativar ou limitar antes da abertura ao público.",
+    },
+  });
+
   const templates = [
     {
       code: "TESTE-VEL-PS",
