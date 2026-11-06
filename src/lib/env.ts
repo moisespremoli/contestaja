@@ -49,6 +49,10 @@ export const env = {
   get retentionDays() {
     return Number(process.env.RETENTION_DAYS ?? "180");
   },
+  /** Pagamentos simulados: sempre em desenvolvimento; em produção só com ALLOW_MOCK_PAYMENTS=true (ambiente de teste). */
+  get mockPaymentsEnabled() {
+    return this.paymentProvider === "mock" && (!this.isProduction || process.env.ALLOW_MOCK_PAYMENTS === "true");
+  },
   get isProduction() {
     return process.env.NODE_ENV === "production";
   },

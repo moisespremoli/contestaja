@@ -6,12 +6,12 @@ import { hmac } from "@/modules/crypto";
 export const dynamic = "force-dynamic";
 
 /**
- * SIMULADOR DO GATEWAY (apenas com PAYMENT_PROVIDER=mock e fora de produção).
+ * SIMULADOR DO GATEWAY (apenas com PAYMENT_PROVIDER=mock; em produção só com ALLOW_MOCK_PAYMENTS=true).
  * Envia ao webhook um evento assinado, exatamente como faria um gateway real.
  */
 async function simulate(ref: string, status: "CONFIRMED" | "FAILED", back: string) {
   "use server";
-  if (env.isProduction || env.paymentProvider !== "mock") throw new Error("Indisponível");
+  if (!env.mockPaymentsEnabled) throw new Error("Indisponível");
   const body = JSON.stringify({ providerRef: ref, status });
   await fetch(`${env.appUrl}/api/payments/webhook`, {
     method: "POST",
@@ -22,7 +22,7 @@ async function simulate(ref: string, status: "CONFIRMED" | "FAILED", back: strin
 }
 
 export default async function DevPayment({ params, searchParams }: PageProps<"/dev/pagamento/[ref]">) {
-  if (env.isProduction || env.paymentProvider !== "mock") notFound();
+  if (!env.mockPaymentsEnabled) notFound();
   const { ref } = await params;
   const { back } = await searchParams;
   const payment = await db.payment.findUnique({ where: { providerRef: ref }, include: { case: true } });

@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+storage
+minutas-privadas
+.env
+.env.*
+!.env.example
+.agents
+.windsurf
+.claude
+*.tsbuildinfo

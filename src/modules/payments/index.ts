@@ -20,7 +20,7 @@ export function ifthenpayConfig() {
 export function getPaymentProvider(): PaymentProvider {
   switch (env.paymentProvider) {
     case "mock":
-      if (env.isProduction && process.env.ALLOW_MOCK_PAYMENTS !== "true") {
+      if (!env.mockPaymentsEnabled) {
         throw new Error("O provider de pagamentos 'mock' não pode ser usado em produção.");
       }
       return mockProvider();
